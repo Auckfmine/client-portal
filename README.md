@@ -2,6 +2,18 @@
 
 A professional, full-stack client management and project tracking application built with **FastAPI** and **React**. Features a stunning dark-themed UI with smooth animations, real-time analytics, and comprehensive business management tools.
 
+## Screenshots
+
+![Dashboard Overview](screenshots/Screenshot%20from%202026-01-04%2021-50-33.png)
+![Projects View](screenshots/Screenshot%20from%202026-01-04%2021-51-29.png)
+![Project Detail](screenshots/Screenshot%20from%202026-01-04%2021-51-36.png)
+![Clients](screenshots/Screenshot%20from%202026-01-04%2021-51-40.png)
+![Invoices](screenshots/Screenshot%20from%202026-01-04%2021-51-47.png)
+![Invoice Form](screenshots/Screenshot%20from%202026-01-04%2021-51-56.png)
+![Tasks Board](screenshots/Screenshot%20from%202026-01-04%2021-52-05.png)
+
+---
+
 ## Features
 
 - **Authentication System** - JWT-based secure authentication with login/register
@@ -248,18 +260,6 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - Smooth page transitions with Framer Motion
 - Custom scrollbars
 - Responsive grid layouts
-
----
-
-## Screenshots
-
-![Dashboard Overview](screenshots/Screenshot%20from%202026-01-04%2021-50-33.png)
-![Projects View](screenshots/Screenshot%20from%202026-01-04%2021-51-29.png)
-![Project Detail](screenshots/Screenshot%20from%202026-01-04%2021-51-36.png)
-![Clients](screenshots/Screenshot%20from%202026-01-04%2021-51-40.png)
-![Invoices](screenshots/Screenshot%20from%202026-01-04%2021-51-47.png)
-![Invoice Form](screenshots/Screenshot%20from%202026-01-04%2021-51-56.png)
-![Tasks Board](screenshots/Screenshot%20from%202026-01-04%2021-52-05.png)
 
 ---
 
