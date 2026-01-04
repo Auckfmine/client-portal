@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from typing import Optional, List
-from models import ProjectStatus, InvoiceStatus
+from models import ProjectStatus, InvoiceStatus, TaskStatus, TaskPriority, PaymentTerms
 
 # Auth Schemas
 class UserCreate(BaseModel):
@@ -64,18 +64,45 @@ class ClientResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# Project Schemas
+# Task Schemas
 class TaskCreate(BaseModel):
     title: str
+    description: Optional[str] = None
+    status: Optional[TaskStatus] = TaskStatus.TODO
+    priority: Optional[TaskPriority] = TaskPriority.MEDIUM
+    due_date: Optional[datetime] = None
+    estimated_hours: Optional[float] = None
+    position: Optional[int] = 0
+
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    status: Optional[TaskStatus] = None
+    priority: Optional[TaskPriority] = None
+    due_date: Optional[datetime] = None
+    estimated_hours: Optional[float] = None
+    actual_hours: Optional[float] = None
+    position: Optional[int] = None
 
 class TaskResponse(BaseModel):
     id: int
     title: str
+    description: Optional[str]
+    status: TaskStatus
+    priority: TaskPriority
+    due_date: Optional[datetime]
+    estimated_hours: Optional[float]
+    actual_hours: float
+    position: int
     completed: int
+    project_id: int
     created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
+
+# Project Schemas
 
 class ProjectCreate(BaseModel):
     name: str
@@ -113,33 +140,99 @@ class ProjectResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# Invoice Item Schemas
+class InvoiceItemCreate(BaseModel):
+    description: str
+    quantity: float = 1
+    unit_price: float = 0
+
+class InvoiceItemUpdate(BaseModel):
+    description: Optional[str] = None
+    quantity: Optional[float] = None
+    unit_price: Optional[float] = None
+    position: Optional[int] = None
+
+class InvoiceItemResponse(BaseModel):
+    id: int
+    description: str
+    quantity: float
+    unit_price: float
+    amount: float
+    position: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 # Invoice Schemas
 class InvoiceCreate(BaseModel):
-    amount: float
-    due_date: datetime
-    description: Optional[str] = None
     client_id: int
+    project_id: Optional[int] = None
+    issue_date: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+    payment_terms: Optional[PaymentTerms] = PaymentTerms.NET_30
+    tax_rate: Optional[float] = 0
+    discount_percent: Optional[float] = 0
+    notes: Optional[str] = None
+    description: Optional[str] = None
+    items: Optional[List[InvoiceItemCreate]] = []
 
 class InvoiceUpdate(BaseModel):
-    amount: Optional[float] = None
     status: Optional[InvoiceStatus] = None
+    issue_date: Optional[datetime] = None
     due_date: Optional[datetime] = None
+    payment_terms: Optional[PaymentTerms] = None
+    tax_rate: Optional[float] = None
+    discount_percent: Optional[float] = None
+    notes: Optional[str] = None
     description: Optional[str] = None
+    amount_paid: Optional[float] = None
 
 class InvoiceResponse(BaseModel):
     id: int
     invoice_number: str
-    amount: float
     status: InvoiceStatus
+
+    # Dates
+    issue_date: datetime
     due_date: datetime
     paid_date: Optional[datetime]
+    sent_date: Optional[datetime]
+
+    # Payment
+    payment_terms: PaymentTerms
+
+    # Amounts
+    subtotal: float
+    tax_rate: float
+    tax_amount: float
+    discount_percent: float
+    discount_amount: float
+    total: float
+    amount_paid: float
+    amount_due: float
+
+    # Content
+    notes: Optional[str]
     description: Optional[str]
+
+    # Relationships
     created_at: datetime
+    updated_at: datetime
     client_id: int
+    project_id: Optional[int]
     client_name: Optional[str] = None
+    project_name: Optional[str] = None
+    items: List[InvoiceItemResponse] = []
 
     class Config:
         from_attributes = True
+
+class InvoicePayment(BaseModel):
+    """Schema for recording a payment"""
+    amount: float
+    payment_date: Optional[datetime] = None
+    notes: Optional[str] = None
 
 # Activity Schemas
 class ActivityResponse(BaseModel):

@@ -18,6 +18,17 @@ class InvoiceStatus(str, enum.Enum):
     SENT = "sent"
     PAID = "paid"
     OVERDUE = "overdue"
+    PARTIALLY_PAID = "partially_paid"
+    CANCELLED = "cancelled"
+
+
+class PaymentTerms(str, enum.Enum):
+    DUE_ON_RECEIPT = "due_on_receipt"
+    NET_7 = "net_7"
+    NET_15 = "net_15"
+    NET_30 = "net_30"
+    NET_60 = "net_60"
+    CUSTOM = "custom"
 
 
 class TaskStatus(str, enum.Enum):
@@ -115,17 +126,57 @@ class Invoice(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     invoice_number = Column(String, unique=True)
-    amount = Column(Float)
     status = Column(SQLEnum(InvoiceStatus), default=InvoiceStatus.DRAFT)
+
+    # Dates
+    issue_date = Column(DateTime, default=datetime.utcnow)
     due_date = Column(DateTime)
     paid_date = Column(DateTime, nullable=True)
-    description = Column(Text, nullable=True)
+    sent_date = Column(DateTime, nullable=True)
+
+    # Payment terms
+    payment_terms = Column(SQLEnum(PaymentTerms), default=PaymentTerms.NET_30)
+
+    # Amounts
+    subtotal = Column(Float, default=0)
+    tax_rate = Column(Float, default=0)  # Percentage (e.g., 10 for 10%)
+    tax_amount = Column(Float, default=0)
+    discount_percent = Column(Float, default=0)
+    discount_amount = Column(Float, default=0)
+    total = Column(Float, default=0)
+    amount_paid = Column(Float, default=0)
+    amount_due = Column(Float, default=0)
+
+    # Content
+    notes = Column(Text, nullable=True)  # Terms, notes, thank you message
+    description = Column(Text, nullable=True)  # Legacy field / summary
+
+    # Relationships
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     owner_id = Column(Integer, ForeignKey("users.id"))
     client_id = Column(Integer, ForeignKey("clients.id"))
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
 
     owner = relationship("User", back_populates="invoices")
     client = relationship("Client", back_populates="invoices")
+    project = relationship("Project", backref="invoices")
+    items = relationship("InvoiceItem", back_populates="invoice", cascade="all, delete-orphan", order_by="InvoiceItem.position")
+
+
+class InvoiceItem(Base):
+    __tablename__ = "invoice_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoice_id = Column(Integer, ForeignKey("invoices.id"))
+    description = Column(String)
+    quantity = Column(Float, default=1)
+    unit_price = Column(Float, default=0)
+    amount = Column(Float, default=0)  # quantity * unit_price
+    position = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    invoice = relationship("Invoice", back_populates="items")
 
 
 class Activity(Base):

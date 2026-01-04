@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, Search, Calendar, DollarSign, CheckCircle2,
   Trash2, Edit2, X, FolderKanban, Circle, ListTodo,
-  ChevronRight
+  ChevronRight, Clock, AlertCircle, PlayCircle, Flag,
+  ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,6 +16,19 @@ const STATUS_CONFIG = {
   on_hold: { label: 'On Hold', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.15)' }
 };
 
+const TASK_STATUS_CONFIG = {
+  todo: { label: 'To Do', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.15)', icon: Circle },
+  in_progress: { label: 'In Progress', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.15)', icon: PlayCircle },
+  completed: { label: 'Completed', color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)', icon: CheckCircle2 }
+};
+
+const PRIORITY_CONFIG = {
+  low: { label: 'Low', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.1)' },
+  medium: { label: 'Medium', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)' },
+  high: { label: 'High', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.1)' },
+  urgent: { label: 'Urgent', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.1)' }
+};
+
 export default function Projects() {
   const { api } = useAuth();
   const [projects, setProjects] = useState([]);
@@ -22,11 +36,13 @@ export default function Projects() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [editingTask, setEditingTask] = useState(null);
   const [selectedProject, setSelectedProject] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [taskFilter, setTaskFilter] = useState('all');
 
   const [form, setForm] = useState({
     name: '',
@@ -35,6 +51,15 @@ export default function Projects() {
     budget: '',
     deadline: '',
     client_id: ''
+  });
+
+  const [taskForm, setTaskForm] = useState({
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    due_date: '',
+    estimated_hours: ''
   });
 
   useEffect(() => {
@@ -125,31 +150,70 @@ export default function Projects() {
   };
 
   // Task functions
-  const addTask = async (e) => {
+  const openTaskModal = (task = null) => {
+    if (task) {
+      setEditingTask(task);
+      setTaskForm({
+        title: task.title,
+        description: task.description || '',
+        status: task.status,
+        priority: task.priority,
+        due_date: task.due_date ? task.due_date.split('T')[0] : '',
+        estimated_hours: task.estimated_hours?.toString() || ''
+      });
+    } else {
+      setEditingTask(null);
+      setTaskForm({
+        title: '',
+        description: '',
+        status: 'todo',
+        priority: 'medium',
+        due_date: '',
+        estimated_hours: ''
+      });
+    }
+    setShowTaskModal(true);
+  };
+
+  const handleTaskSubmit = async (e) => {
     e.preventDefault();
-    if (!newTaskTitle.trim() || !selectedProject) return;
+    if (!taskForm.title.trim() || !selectedProject) return;
 
     try {
-      await api.post(`/projects/${selectedProject.id}/tasks`, { title: newTaskTitle });
-      setNewTaskTitle('');
+      const data = {
+        ...taskForm,
+        due_date: taskForm.due_date ? new Date(taskForm.due_date).toISOString() : null,
+        estimated_hours: taskForm.estimated_hours ? parseFloat(taskForm.estimated_hours) : null
+      };
+
+      if (editingTask) {
+        await api.put(`/tasks/${editingTask.id}`, data);
+      } else {
+        await api.post(`/projects/${selectedProject.id}/tasks`, data);
+      }
+
+      setShowTaskModal(false);
+      setEditingTask(null);
+      setTaskForm({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', estimated_hours: '' });
       fetchProject(selectedProject.id);
       fetchProjects();
     } catch (err) {
-      console.error('Failed to add task:', err);
+      console.error('Failed to save task:', err);
     }
   };
 
-  const toggleTask = async (taskId) => {
+  const updateTaskStatus = async (taskId, newStatus) => {
     try {
-      await api.put(`/tasks/${taskId}/toggle`);
+      await api.put(`/tasks/${taskId}`, { status: newStatus });
       fetchProject(selectedProject.id);
       fetchProjects();
     } catch (err) {
-      console.error('Failed to toggle task:', err);
+      console.error('Failed to update task status:', err);
     }
   };
 
   const deleteTask = async (taskId) => {
+    if (!confirm('Delete this task?')) return;
     try {
       await api.delete(`/tasks/${taskId}`);
       fetchProject(selectedProject.id);
@@ -164,6 +228,29 @@ export default function Projects() {
     const matchesFilter = filterStatus === 'all' || p.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
+
+  const getFilteredTasks = () => {
+    if (!selectedProject?.tasks) return [];
+    if (taskFilter === 'all') return selectedProject.tasks;
+    return selectedProject.tasks.filter(t => t.status === taskFilter);
+  };
+
+  const isOverdue = (dueDate) => {
+    if (!dueDate) return false;
+    return new Date(dueDate) < new Date() && new Date(dueDate).toDateString() !== new Date().toDateString();
+  };
+
+  const formatDueDate = (dueDate) => {
+    if (!dueDate) return null;
+    const date = new Date(dueDate);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === tomorrow.toDateString()) return 'Tomorrow';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   if (loading) {
     return (
@@ -238,7 +325,8 @@ export default function Projects() {
             {filteredProjects.map((project, index) => {
               const status = STATUS_CONFIG[project.status] || STATUS_CONFIG.planning;
               const taskCount = project.tasks?.length || 0;
-              const completedTasks = project.tasks?.filter(t => t.completed)?.length || 0;
+              const completedTasks = project.tasks?.filter(t => t.status === 'completed')?.length || 0;
+              const inProgressTasks = project.tasks?.filter(t => t.status === 'in_progress')?.length || 0;
 
               return (
                 <motion.div
@@ -302,17 +390,25 @@ export default function Projects() {
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.5rem',
+                      gap: '0.75rem',
                       marginBottom: '1rem',
-                      padding: '0.5rem 0.75rem',
+                      padding: '0.625rem 0.75rem',
                       background: 'var(--bg-tertiary)',
                       borderRadius: 'var(--radius-sm)',
-                      fontSize: '0.8125rem'
+                      fontSize: '0.75rem'
                     }}>
-                      <ListTodo size={14} style={{ color: 'var(--accent-primary)' }} />
-                      <span style={{ color: 'var(--text-secondary)' }}>
-                        {completedTasks}/{taskCount} tasks completed
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: 'var(--text-muted)' }}>
+                        <Circle size={12} />
+                        <span>{taskCount - completedTasks - inProgressTasks}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: '#F59E0B' }}>
+                        <PlayCircle size={12} />
+                        <span>{inProgressTasks}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', color: '#10B981' }}>
+                        <CheckCircle2 size={12} />
+                        <span>{completedTasks}</span>
+                      </div>
                     </div>
                   )}
 
@@ -506,7 +602,7 @@ export default function Projects() {
         )}
       </AnimatePresence>
 
-      {/* Project Detail Modal with Tasks */}
+      {/* Project Detail Modal with Enhanced Tasks */}
       <AnimatePresence>
         {showDetailModal && selectedProject && (
           <motion.div
@@ -522,7 +618,7 @@ export default function Projects() {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: 600 }}
+              style={{ maxWidth: 700, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
             >
               <div className="modal-header">
                 <div>
@@ -542,11 +638,11 @@ export default function Projects() {
                 </button>
               </div>
 
-              <div className="modal-body">
+              <div className="modal-body" style={{ overflowY: 'auto', flex: 1 }}>
                 {/* Project Info */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
                   gap: '1rem',
                   marginBottom: '1.5rem',
                   padding: '1rem',
@@ -570,6 +666,10 @@ export default function Projects() {
                     <div style={{ fontWeight: 600 }}>${selectedProject.budget?.toLocaleString() || 0}</div>
                   </div>
                   <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Spent</div>
+                    <div style={{ fontWeight: 600 }}>${selectedProject.spent?.toLocaleString() || 0}</div>
+                  </div>
+                  <div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Progress</div>
                     <div style={{ fontWeight: 600 }}>{selectedProject.progress}%</div>
                   </div>
@@ -591,95 +691,206 @@ export default function Projects() {
                         color: 'var(--text-muted)',
                         fontWeight: 400
                       }}>
-                        ({selectedProject.tasks?.filter(t => t.completed).length || 0}/{selectedProject.tasks?.length || 0})
+                        ({selectedProject.tasks?.filter(t => t.status === 'completed').length || 0}/{selectedProject.tasks?.length || 0})
                       </span>
                     </h4>
+                    <button className="btn btn-primary btn-sm" onClick={() => openTaskModal()}>
+                      <Plus size={16} />
+                      Add Task
+                    </button>
                   </div>
 
-                  {/* Add Task Form */}
-                  <form onSubmit={addTask} style={{ marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <input
-                        type="text"
-                        className="input"
-                        placeholder="Add a new task..."
-                        value={newTaskTitle}
-                        onChange={(e) => setNewTaskTitle(e.target.value)}
-                        style={{ flex: 1 }}
-                      />
-                      <button type="submit" className="btn btn-primary">
-                        <Plus size={18} />
-                      </button>
-                    </div>
-                  </form>
+                  {/* Task Filter Tabs */}
+                  <div style={{
+                    display: 'flex',
+                    gap: '0.5rem',
+                    marginBottom: '1rem',
+                    overflowX: 'auto',
+                    paddingBottom: '0.25rem'
+                  }}>
+                    <button
+                      onClick={() => setTaskFilter('all')}
+                      style={{
+                        padding: '0.5rem 1rem',
+                        background: taskFilter === 'all' ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                        color: taskFilter === 'all' ? 'white' : 'var(--text-secondary)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      All ({selectedProject.tasks?.length || 0})
+                    </button>
+                    {Object.entries(TASK_STATUS_CONFIG).map(([key, config]) => {
+                      const count = selectedProject.tasks?.filter(t => t.status === key).length || 0;
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setTaskFilter(key)}
+                          style={{
+                            padding: '0.5rem 1rem',
+                            background: taskFilter === key ? config.bg : 'var(--bg-tertiary)',
+                            color: taskFilter === key ? config.color : 'var(--text-secondary)',
+                            border: taskFilter === key ? `1px solid ${config.color}` : '1px solid transparent',
+                            borderRadius: 'var(--radius-sm)',
+                            cursor: 'pointer',
+                            fontSize: '0.8125rem',
+                            fontWeight: 500,
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {config.label} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
 
                   {/* Tasks List */}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {selectedProject.tasks?.length > 0 ? (
-                      selectedProject.tasks.map((task, index) => (
-                        <motion.div
-                          key={task.id}
-                          initial={{ opacity: 0, x: -10 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.03 }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.75rem',
-                            padding: '0.75rem 1rem',
-                            background: 'var(--bg-tertiary)',
-                            borderRadius: 'var(--radius-sm)',
-                            border: '1px solid var(--border-subtle)'
-                          }}
-                        >
-                          <button
-                            onClick={() => toggleTask(task.id)}
+                    {getFilteredTasks().length > 0 ? (
+                      getFilteredTasks().map((task, index) => {
+                        const taskStatus = TASK_STATUS_CONFIG[task.status];
+                        const priority = PRIORITY_CONFIG[task.priority];
+                        const StatusIcon = taskStatus?.icon || Circle;
+                        const overdue = task.status !== 'completed' && isOverdue(task.due_date);
+
+                        return (
+                          <motion.div
+                            key={task.id}
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.03 }}
                             style={{
-                              background: 'none',
-                              border: 'none',
-                              padding: 0,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              color: task.completed ? 'var(--accent-primary)' : 'var(--text-muted)'
+                              padding: '1rem',
+                              background: 'var(--bg-tertiary)',
+                              borderRadius: 'var(--radius-md)',
+                              border: overdue ? '1px solid var(--accent-danger)' : '1px solid var(--border-subtle)'
                             }}
                           >
-                            {task.completed ? (
-                              <CheckCircle2 size={20} />
-                            ) : (
-                              <Circle size={20} />
-                            )}
-                          </button>
-                          <span style={{
-                            flex: 1,
-                            textDecoration: task.completed ? 'line-through' : 'none',
-                            color: task.completed ? 'var(--text-muted)' : 'var(--text-primary)'
-                          }}>
-                            {task.title}
-                          </span>
-                          <button
-                            onClick={() => deleteTask(task.id)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              padding: '0.25rem',
-                              cursor: 'pointer',
-                              color: 'var(--text-muted)',
-                              opacity: 0.6,
-                              transition: 'all var(--transition-fast)'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.opacity = 1;
-                              e.target.style.color = 'var(--accent-danger)';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.opacity = 0.6;
-                              e.target.style.color = 'var(--text-muted)';
-                            }}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </motion.div>
-                      ))
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+                              {/* Status Dropdown */}
+                              <div style={{ position: 'relative' }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const nextStatus = task.status === 'todo' ? 'in_progress' : task.status === 'in_progress' ? 'completed' : 'todo';
+                                    updateTaskStatus(task.id, nextStatus);
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    color: taskStatus?.color
+                                  }}
+                                  title={`Click to change status`}
+                                >
+                                  <StatusIcon size={22} />
+                                </button>
+                              </div>
+
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem', flexWrap: 'wrap' }}>
+                                  <span style={{
+                                    fontWeight: 500,
+                                    textDecoration: task.status === 'completed' ? 'line-through' : 'none',
+                                    color: task.status === 'completed' ? 'var(--text-muted)' : 'var(--text-primary)'
+                                  }}>
+                                    {task.title}
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      padding: '0.125rem 0.5rem',
+                                      background: priority?.bg,
+                                      color: priority?.color,
+                                      borderRadius: '9999px',
+                                      fontSize: '0.6875rem',
+                                      fontWeight: 500
+                                    }}
+                                  >
+                                    <Flag size={10} />
+                                    {priority?.label}
+                                  </span>
+                                </div>
+
+                                {task.description && (
+                                  <p style={{
+                                    fontSize: '0.8125rem',
+                                    color: 'var(--text-muted)',
+                                    marginBottom: '0.5rem',
+                                    lineHeight: 1.4
+                                  }}>
+                                    {task.description}
+                                  </p>
+                                )}
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                                  {task.due_date && (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      fontSize: '0.75rem',
+                                      color: overdue ? 'var(--accent-danger)' : 'var(--text-muted)'
+                                    }}>
+                                      {overdue ? <AlertCircle size={12} /> : <Calendar size={12} />}
+                                      {formatDueDate(task.due_date)}
+                                    </span>
+                                  )}
+                                  {task.estimated_hours && (
+                                    <span style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.25rem',
+                                      fontSize: '0.75rem',
+                                      color: 'var(--text-muted)'
+                                    }}>
+                                      <Clock size={12} />
+                                      {task.actual_hours > 0 ? `${task.actual_hours}/${task.estimated_hours}h` : `${task.estimated_hours}h est.`}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '0.25rem' }}>
+                                <button
+                                  onClick={() => openTaskModal(task)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '0.375rem',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-muted)',
+                                    borderRadius: 'var(--radius-sm)'
+                                  }}
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => deleteTask(task.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: '0.375rem',
+                                    cursor: 'pointer',
+                                    color: 'var(--text-muted)',
+                                    borderRadius: 'var(--radius-sm)'
+                                  }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </motion.div>
+                        );
+                      })
                     ) : (
                       <div style={{
                         padding: '2rem',
@@ -688,7 +899,7 @@ export default function Projects() {
                         background: 'var(--bg-tertiary)',
                         borderRadius: 'var(--radius-md)'
                       }}>
-                        No tasks yet. Add your first task above!
+                        {taskFilter === 'all' ? 'No tasks yet. Click "Add Task" to create one!' : `No ${TASK_STATUS_CONFIG[taskFilter]?.label.toLowerCase()} tasks.`}
                       </div>
                     )}
                   </div>
@@ -713,6 +924,133 @@ export default function Projects() {
                   Edit Project
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Task Create/Edit Modal */}
+      <AnimatePresence>
+        {showTaskModal && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowTaskModal(false)}
+            style={{ zIndex: 1001 }}
+          >
+            <motion.div
+              className="modal"
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: 500 }}
+            >
+              <div className="modal-header">
+                <h3>{editingTask ? 'Edit Task' : 'New Task'}</h3>
+                <button
+                  className="btn btn-ghost"
+                  onClick={() => setShowTaskModal(false)}
+                  style={{ padding: '0.5rem' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleTaskSubmit}>
+                <div className="modal-body">
+                  <div className="input-group">
+                    <label>Task Title</label>
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="E.g., Implement user authentication"
+                      value={taskForm.title}
+                      onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="input-group">
+                    <label>Description</label>
+                    <textarea
+                      className="input"
+                      placeholder="Task details..."
+                      value={taskForm.description}
+                      onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="input-group">
+                      <label>Status</label>
+                      <select
+                        className="input"
+                        value={taskForm.status}
+                        onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}
+                      >
+                        {Object.entries(TASK_STATUS_CONFIG).map(([key, value]) => (
+                          <option key={key} value={key}>{value.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="input-group">
+                      <label>Priority</label>
+                      <select
+                        className="input"
+                        value={taskForm.priority}
+                        onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value })}
+                      >
+                        {Object.entries(PRIORITY_CONFIG).map(([key, value]) => (
+                          <option key={key} value={key}>{value.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="input-group">
+                      <label>Due Date</label>
+                      <input
+                        type="date"
+                        className="input"
+                        value={taskForm.due_date}
+                        onChange={(e) => setTaskForm({ ...taskForm, due_date: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="input-group">
+                      <label>Estimated Hours</label>
+                      <input
+                        type="number"
+                        className="input"
+                        placeholder="8"
+                        value={taskForm.estimated_hours}
+                        onChange={(e) => setTaskForm({ ...taskForm, estimated_hours: e.target.value })}
+                        step="0.5"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => setShowTaskModal(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary">
+                    {editingTask ? 'Save Changes' : 'Create Task'}
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}
