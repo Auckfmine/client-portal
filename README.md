@@ -16,7 +16,7 @@ A professional, full-stack client management and project tracking application bu
 
 ## Features
 
-- **Authentication System** - JWT-based secure authentication with login/register
+- **Authentication System** - JWT-based secure authentication with login/register 
 - **Dashboard Analytics** - Revenue charts, project status distribution, activity timeline
 - **Project Management** - Create, track, and manage projects with progress tracking
 - **Client Management** - Comprehensive client database with contact details
