@@ -251,6 +251,18 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ---
 
+## Screenshots
+
+![Dashboard Overview](screenshots/Screenshot%20from%202026-01-04%2021-50-33.png)
+![Projects View](screenshots/Screenshot%20from%202026-01-04%2021-51-29.png)
+![Project Detail](screenshots/Screenshot%20from%202026-01-04%2021-51-36.png)
+![Clients](screenshots/Screenshot%20from%202026-01-04%2021-51-40.png)
+![Invoices](screenshots/Screenshot%20from%202026-01-04%2021-51-47.png)
+![Invoice Form](screenshots/Screenshot%20from%202026-01-04%2021-51-56.png)
+![Tasks Board](screenshots/Screenshot%20from%202026-01-04%2021-52-05.png)
+
+---
+
 ## Customization
 
 ### Change Theme Colors
